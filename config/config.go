@@ -9,9 +9,17 @@ import (
 
 type Config struct {
 	Telegram TelegramConfig
+	Db       DbConfig
 }
 type TelegramConfig struct {
 	Token string
+}
+type DbConfig struct {
+	User     string
+	Password string
+	Name     string
+	Port     string
+	Host     string
 }
 
 func LoadConfig() (*Config, error) {
@@ -21,7 +29,15 @@ func LoadConfig() (*Config, error) {
 	telegramConfig := TelegramConfig{
 		Token: os.Getenv("BOT_TOKEN"),
 	}
+	dbConfig := DbConfig{
+		User:     os.Getenv("DB_USER"),
+		Password: os.Getenv("DB_PASSWORD"),
+		Name:     os.Getenv("DB_NAME"),
+		Port:     os.Getenv("DB_PORT"),
+		Host:     os.Getenv("DB_HOST"),
+	}
 	return &Config{
 		Telegram: telegramConfig,
+		Db:       dbConfig,
 	}, nil
 }
