@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15
-    container_name: db_postgres
+    container_name: postgres_db
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -35,3 +35,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+networks:
+  default:
+    driver: bridge

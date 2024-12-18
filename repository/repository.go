@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log"
 	"stomatology_bot/domain"
 
 	"github.com/jackc/pgx/v5"
@@ -36,8 +37,9 @@ func (r *BookingRepo) GetAllBooking() ([]domain.Booking, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var bookingItem domain.Booking
-		if err := rows.Scan(&bookingItem.ID, &bookingItem.Name, &bookingItem.Contact, bookingItem.Datetime); err != nil {
-			return nil, err
+		if err := rows.Scan(&bookingItem.ID, &bookingItem.Name, &bookingItem.Contact, &bookingItem.Datetime); err != nil {
+			log.Printf("Ошибка при сканировании строки: %v", err)
+			continue
 		}
 		bookings = append(bookings, bookingItem)
 	}
@@ -48,4 +50,32 @@ func (r *BookingRepo) DeleteBookingById(id int) error {
 	query := `DELETE FROM bookings WHERE id = $1`
 	_, err := r.conn.Exec(context.Background(), query, id)
 	return err
+}
+
+func (r *BookingRepo) GetUserBookings(userID int64) ([]domain.Booking, error) {
+	var bookings []domain.Booking
+	// Используем $1 вместо ?
+	query := "SELECT id, name, contact, datetime FROM bookings WHERE user_id = $1"
+	rows, err := r.conn.Query(context.Background(), query, userID)
+	if err != nil {
+		log.Printf("Ошибка при выполнении запроса: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var booking domain.Booking
+		if err := rows.Scan(&booking.ID, &booking.Name, &booking.Contact, &booking.Datetime); err != nil {
+			log.Printf("Ошибка при сканировании строки: %v", err)
+			continue
+		}
+		bookings = append(bookings, booking)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Ошибка при переборе строк: %v", err)
+		return nil, err
+	}
+
+	return bookings, nil
 }
