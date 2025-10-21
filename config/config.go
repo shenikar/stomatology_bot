@@ -12,7 +12,8 @@ type Config struct {
 	Db       DbConfig
 }
 type TelegramConfig struct {
-	Token string
+	Token      string
+	CalendarID string
 }
 type DbConfig struct {
 	User     string
@@ -27,7 +28,8 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("error loading .env file: %v", err)
 	}
 	telegramConfig := TelegramConfig{
-		Token: os.Getenv("BOT_TOKEN"),
+		Token:      os.Getenv("BOT_TOKEN"),
+		CalendarID: os.Getenv("CALENDAR_ID"),
 	}
 	dbConfig := DbConfig{
 		User:     os.Getenv("DB_USER"),
