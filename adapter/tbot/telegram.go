@@ -47,30 +47,46 @@ func (b *TgBot) Start() {
 }
 
 func (b *TgBot) processUpdate(update tgbot.Update) {
-	switch update.Message.Text {
-	case "/start":
-		msg := tgbot.NewMessage(update.Message.Chat.ID, "Добро пожаловать! Я бот для записи в стоматологическую клинику. Используйте команду /help для получения списка доступных команд.")
-		b.api.Send(msg)
-	case "/help":
-		msg := tgbot.NewMessage(update.Message.Chat.ID, "Список доступных команд:\n/start - Начать работу с ботом\n/help - Помощь\n/book - Записаться на приём\n/mybookings - Вывод всех записей клиента.")
-		b.api.Send(msg)
-	case "/book":
-		b.handleBookCommand(update.Message.Chat.ID)
-	case "/mybookings":
-		b.handleShowAllBooking(update)
-	default:
-		b.sendMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте /help для получения списка доступных команд.")
+	if update.Message.IsCommand() {
+		switch update.Message.Command() {
+		case "start":
+			b.sendMainMenu(update.Message.Chat.ID)
+		case "help":
+			b.sendMainMenu(update.Message.Chat.ID)
+		default:
+			b.sendMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте /help для получения списка доступных команд.")
+		}
+	} else {
+		// Если это не команда, предполагаем, что это может быть ответ, который требует обработки в будущем
+		// Например, ввод номера телефона или имени
+		b.sendMessage(update.Message.Chat.ID, "Пожалуйста, используйте кнопки для взаимодействия с ботом.")
 	}
 }
 
 func (b *TgBot) handleCallbackQuery(update tgbot.Update) {
-	if update.CallbackQuery != nil {
-		// Простое определение шага по префиксу данных колбэка
-		if strings.HasPrefix(update.CallbackQuery.Data, "date_") {
-			b.handleDateSelection(update)
-		} else if strings.HasPrefix(update.CallbackQuery.Data, "time_") {
-			b.handleTimeSelection(update)
-		}
+	if update.CallbackQuery == nil {
+		return
+	}
+
+	// Отправляем "typing" статус
+	callback := tgbot.NewCallback(update.CallbackQuery.ID, "")
+	b.api.Request(callback)
+
+	chatID := update.CallbackQuery.Message.Chat.ID
+
+	// Разбор данных колбэка
+	data := update.CallbackQuery.Data
+	switch {
+	case data == "book":
+		b.handleBookCommand(chatID)
+	case data == "my_bookings":
+		b.handleShowAllBooking(update) // Передаем весь update
+	case strings.HasPrefix(data, "date_"):
+		b.handleDateSelection(update)
+	case strings.HasPrefix(data, "time_"):
+		b.handleTimeSelection(update)
+	default:
+		b.sendMessage(chatID, "Неизвестное действие.")
 	}
 }
 
@@ -132,6 +148,20 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 	chatID := update.CallbackQuery.Message.Chat.ID
 	userName := update.CallbackQuery.From.UserName
 
+	// Повторная проверка, свободен ли слот, для предотвращения состояния гонки
+	isFree, err := b.calendarSvc.IsSlotFree(slot, slot.Add(slotDuration))
+	if err != nil {
+		log.Printf("Ошибка проверки доступности слота: %v", err)
+		b.sendMessage(chatID, "Произошла ошибка. Попробуйте снова.")
+		return
+	}
+
+	if !isFree {
+		b.sendMessage(chatID, "К сожалению, этот слот только что заняли. Пожалуйста, выберите другое время.")
+		// Опционально: можно заново отправить клавиатуру со свободными слотами
+		return
+	}
+
 	// Создаем событие в Google Calendar
 	summary := fmt.Sprintf("Запись: %s", userName)
 	description := fmt.Sprintf("Запись на прием от пользователя %s.", userName)
@@ -161,7 +191,15 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 }
 
 func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
-	chatID := update.Message.Chat.ID
+	var chatID int64
+	if update.Message != nil {
+		chatID = update.Message.Chat.ID
+	} else if update.CallbackQuery != nil {
+		chatID = update.CallbackQuery.Message.Chat.ID
+	} else {
+		return // Не можем определить чат
+	}
+
 	bookings, err := b.repo.GetUserBookings(chatID) // Фильтрация на уровне БД
 	if err != nil {
 		log.Printf("Ошибка получения записей: %v", err)
@@ -187,4 +225,16 @@ func (b *TgBot) sendMessage(chatID int64, text string) {
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("Ошибка при отправке сообщения: %v", err)
 	}
+}
+
+func (b *TgBot) sendMainMenu(chatID int64) {
+	msg := tgbot.NewMessage(chatID, "Добро пожаловать! Выберите действие:")
+	keyboard := tgbot.NewInlineKeyboardMarkup(
+		tgbot.NewInlineKeyboardRow(
+			tgbot.NewInlineKeyboardButtonData("Записаться на приём", "book"),
+			tgbot.NewInlineKeyboardButtonData("Мои записи", "my_bookings"),
+		),
+	)
+	msg.ReplyMarkup = keyboard
+	b.api.Send(msg)
 }
