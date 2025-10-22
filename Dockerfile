@@ -10,7 +10,7 @@ RUN go build -o tgbot cmd/main.go
 
 # Final stage
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /root
 COPY --from=builder /app/tgbot /root/tgbot
 COPY --from=builder /app/migrations ./migrations
