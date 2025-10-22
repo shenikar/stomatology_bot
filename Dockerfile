@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY migrations ./migrations
-RUN go build -o tgbot cmd/main.go
+RUN go build -o tgbot cmd/bot/main.go
 
 # Final stage
 FROM alpine:latest

@@ -1,12 +1,11 @@
-package tbot
+package telegram
 
 import (
 	"fmt"
 	"log"
-	"stomatology_bot/adapter/calendar"
-	"stomatology_bot/config"
-	"stomatology_bot/domain"
-	"stomatology_bot/repository"
+	"stomatology_bot/configs"
+	"stomatology_bot/internal/booking"
+	"stomatology_bot/internal/platform/calendar"
 	"strings"
 	"time"
 
@@ -17,12 +16,12 @@ const slotDuration = time.Hour
 
 type TgBot struct {
 	api         *tgbot.BotAPI
-	cfg         *config.Config
-	repo        *repository.BookingRepo
+	cfg         *configs.Config
+	repo        *booking.BookingRepo
 	calendarSvc *calendar.CalendarService
 }
 
-func NewBot(api *tgbot.BotAPI, cfg *config.Config, repo *repository.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
+func NewBot(api *tgbot.BotAPI, cfg *configs.Config, repo *booking.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
 	return &TgBot{
 		api:         api,
 		cfg:         cfg,
@@ -177,7 +176,7 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 	}
 
 	// Создаем запись в нашей БД
-	booking := &domain.Booking{
+	booking := &booking.Booking{
 		UserID:   chatID,
 		Name:     userName,
 		Contact:  "N/A", // Можно запросить дополнительно

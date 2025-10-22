@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"stomatology_bot/adapter/calendar"
-	"stomatology_bot/adapter/db"
-	"stomatology_bot/adapter/tbot"
-	"stomatology_bot/config"
-	"stomatology_bot/repository"
+	"stomatology_bot/configs"
+	"stomatology_bot/internal/booking"
+	"stomatology_bot/internal/platform/calendar"
+	"stomatology_bot/internal/platform/database"
+	"stomatology_bot/internal/platform/telegram"
 
 	tgbot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/golang-migrate/migrate/v4"
@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.LoadConfig()
+	cfg, err := configs.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,11 +47,11 @@ func main() {
 	}
 
 	// Основное подключение к БД
-	pgxConn, err := db.GetConnect(cfg.Db)
+	pgxConn, err := database.GetConnect(cfg.Db)
 	if err != nil {
 		log.Fatal(err)
 	}
-	repo := repository.NewBookingRepo(pgxConn)
+	repo := booking.NewBookingRepo(pgxConn)
 
 	calendarSvc, err := calendar.NewCalendarService("credentials.json", cfg.Telegram.CalendarID)
 	if err != nil {
@@ -65,7 +65,7 @@ func main() {
 	botApi.Debug = true
 	log.Printf("Authorized on account %s", botApi.Self.UserName)
 
-	bot := tbot.NewBot(botApi, cfg, repo, calendarSvc)
+	bot := telegram.NewBot(botApi, cfg, repo, calendarSvc)
 	bot.Start()
 
 }
