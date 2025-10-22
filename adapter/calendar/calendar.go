@@ -69,7 +69,11 @@ func (s *CalendarService) CreateEvent(summary, description string, start, end ti
 // GetFreeSlots возвращает список свободных слотов на определенный день
 func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
 	// Устанавливаем начало и конец дня
-	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return nil, fmt.Errorf("could not load location: %v", err)
+	}
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
 	// Запрашиваем события на этот день
@@ -91,7 +95,7 @@ func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
 
 	// Генерируем все возможные слоты в течение рабочего дня
 	for hour := workStartHour; hour < workEndHour; hour++ {
-		slot := time.Date(date.Year(), date.Month(), date.Day(), hour, 0, 0, 0, date.Location())
+		slot := time.Date(date.Year(), date.Month(), date.Day(), hour, 0, 0, 0, loc)
 		isBusy := false
 
 		// Проверяем, занят ли этот слот
@@ -115,4 +119,19 @@ func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
 	}
 
 	return freeSlots, nil
+}
+
+// IsSlotFree проверяет, свободен ли временной слот
+func (s *CalendarService) IsSlotFree(start time.Time, end time.Time) (bool, error) {
+	events, err := s.srv.Events.List(s.calID).
+		TimeMin(start.Format(time.RFC3339)).
+		TimeMax(end.Format(time.RFC3339)).
+		MaxResults(1). // Нам достаточно одного события, чтобы понять, что слот занят
+		SingleEvents(true).
+		Do()
+	if err != nil {
+		return false, fmt.Errorf("unable to retrieve events: %v", err)
+	}
+
+	return len(events.Items) == 0, nil
 }
