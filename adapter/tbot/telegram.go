@@ -95,6 +95,10 @@ func (b *TgBot) handleBookCommand(chatID int64) {
 	var buttons [][]tgbot.InlineKeyboardButton
 	for i := 0; i < 7; i++ {
 		date := time.Now().AddDate(0, 0, i)
+		// Пропускаем воскресенье
+		if date.Weekday() == time.Sunday {
+			continue
+		}
 		button := tgbot.NewInlineKeyboardButtonData(date.Format("02.01.2006"), "date_"+date.Format("2006-01-02"))
 		buttons = append(buttons, []tgbot.InlineKeyboardButton{button})
 	}
