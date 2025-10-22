@@ -217,8 +217,17 @@ func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 
 	var response strings.Builder
 	for _, booking := range bookings {
+		loc, err := time.LoadLocation("Europe/Moscow")
+		if err != nil {
+			log.Printf("Ошибка загрузки часового пояса: %v", err)
+			// В случае ошибки выводим как есть (в UTC)
+			response.WriteString(fmt.Sprintf("ID: %d\nИмя: %s\nТелефон: %s\nДата/время: %s\n\n",
+				booking.ID, booking.Name, booking.Contact, booking.Datetime))
+			continue
+		}
+		localTime := booking.Datetime.In(loc)
 		response.WriteString(fmt.Sprintf("ID: %d\nИмя: %s\nТелефон: %s\nДата/время: %s\n\n",
-			booking.ID, booking.Name, booking.Contact, booking.Datetime))
+			booking.ID, booking.Name, booking.Contact, localTime.Format("02.01.2006 15:04")))
 	}
 	b.sendMessage(chatID, response.String())
 }
