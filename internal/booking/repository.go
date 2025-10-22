@@ -17,10 +17,10 @@ func NewBookingRepo(conn *pgx.Conn) *BookingRepo {
 
 func (r *BookingRepo) CreateBooking(booking *Booking) error {
 	query := `
-	INSERT INTO bookings (user_id, name, contact, datetime)
-	VALUES ($1, $2, $3, $4)
+	INSERT INTO bookings (user_id, name, contact, datetime, event_id)
+	VALUES ($1, $2, $3, $4, $5)
 	RETURNING id`
-	row := r.conn.QueryRow(context.Background(), query, booking.UserID, booking.Name, booking.Contact, booking.Datetime)
+	row := r.conn.QueryRow(context.Background(), query, booking.UserID, booking.Name, booking.Contact, booking.Datetime, booking.EventID)
 	err := row.Scan(&booking.ID)
 	return err
 }
@@ -28,7 +28,7 @@ func (r *BookingRepo) CreateBooking(booking *Booking) error {
 func (r *BookingRepo) GetAllBooking() ([]Booking, error) {
 	var bookings []Booking
 	query := `
-		SELECT id, name, contact, datetime FROM bookings`
+		SELECT id, name, contact, datetime, event_id FROM bookings`
 	rows, err := r.conn.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
@@ -36,10 +36,12 @@ func (r *BookingRepo) GetAllBooking() ([]Booking, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var bookingItem Booking
-		if err := rows.Scan(&bookingItem.ID, &bookingItem.Name, &bookingItem.Contact, &bookingItem.Datetime); err != nil {
+		var eventID *string
+		if err := rows.Scan(&bookingItem.ID, &bookingItem.Name, &bookingItem.Contact, &bookingItem.Datetime, &eventID); err != nil {
 			log.Printf("Ошибка при сканировании строки: %v", err)
 			continue
 		}
+		bookingItem.EventID = eventID
 		bookings = append(bookings, bookingItem)
 	}
 	return bookings, rows.Err()
@@ -54,7 +56,7 @@ func (r *BookingRepo) DeleteBookingById(id int) error {
 func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 	var bookings []Booking
 	// Используем $1 вместо ?
-	query := "SELECT id, user_id, name, contact, datetime FROM bookings WHERE user_id = $1"
+	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE user_id = $1"
 	rows, err := r.conn.Query(context.Background(), query, userID)
 	if err != nil {
 		log.Printf("Ошибка при выполнении запроса: %v", err)
@@ -64,10 +66,12 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 
 	for rows.Next() {
 		var booking Booking
-		if err := rows.Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime); err != nil {
+		var eventID *string // Используем *string для сканирования
+		if err := rows.Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime, &eventID); err != nil {
 			log.Printf("Ошибка при сканировании строки: %v", err)
 			continue
 		}
+		booking.EventID = eventID
 		bookings = append(bookings, booking)
 	}
 
@@ -77,4 +81,16 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 	}
 
 	return bookings, nil
+}
+
+func (r *BookingRepo) GetBookingByID(id int) (*Booking, error) {
+	var booking Booking
+	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE id = $1"
+	var eventID *string
+	err := r.conn.QueryRow(context.Background(), query, id).Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime, &eventID)
+	if err != nil {
+		return nil, err
+	}
+	booking.EventID = eventID
+	return &booking, nil
 }

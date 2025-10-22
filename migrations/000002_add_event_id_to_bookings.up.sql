@@ -1,0 +1,1 @@
+ALTER TABLE bookings ADD COLUMN event_id VARCHAR(255);

@@ -10,4 +10,5 @@ type Booking struct {
 	Name     string    `db:"name"`
 	Contact  string    `db:"contact"`
 	Datetime time.Time `db:"datetime"`
+	EventID  *string   `db:"event_id"`
 }

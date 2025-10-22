@@ -6,6 +6,7 @@ import (
 	"stomatology_bot/configs"
 	"stomatology_bot/internal/booking"
 	"stomatology_bot/internal/platform/calendar"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,6 +119,8 @@ func (b *TgBot) handleCallbackQuery(update tgbot.Update) {
 		b.handleDateSelection(update)
 	case strings.HasPrefix(data, "time_"):
 		b.handleTimeSelection(update)
+	case strings.HasPrefix(data, "cancel_"):
+		b.handleCancelBooking(update)
 	default:
 		b.sendMessage(chatID, "Неизвестное действие.")
 	}
@@ -262,6 +265,7 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 		Name:     userName,
 		Contact:  contact,
 		Datetime: slot,
+		EventID:  &eventID,
 	}
 
 	if err := b.repo.CreateBooking(booking); err != nil {
@@ -317,8 +321,56 @@ func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 		localTime := booking.Datetime.In(loc)
 		response.WriteString(fmt.Sprintf("ID: %d\nИмя: %s\nТелефон: %s\nДата/время: %s\n\n",
 			booking.ID, booking.Name, booking.Contact, localTime.Format("02.01.2006 15:04")))
+
+		// Добавляем кнопку отмены для каждой записи
+		keyboard := tgbot.NewInlineKeyboardMarkup(
+			tgbot.NewInlineKeyboardRow(
+				tgbot.NewInlineKeyboardButtonData("Отменить запись", fmt.Sprintf("cancel_%d", booking.ID)),
+			),
+		)
+		msg := tgbot.NewMessage(chatID, response.String())
+		msg.ReplyMarkup = keyboard
+		b.api.Send(msg)
+		response.Reset() // Очищаем builder для следующей записи
 	}
-	b.sendMessage(chatID, response.String())
+}
+
+func (b *TgBot) handleCancelBooking(update tgbot.Update) {
+	chatID := update.CallbackQuery.Message.Chat.ID
+	bookingIDStr := strings.TrimPrefix(update.CallbackQuery.Data, "cancel_")
+	bookingID, err := strconv.Atoi(bookingIDStr)
+	if err != nil {
+		log.Printf("Ошибка конвертации ID записи: %v", err)
+		b.sendMessage(chatID, "Некорректный ID записи.")
+		return
+	}
+
+	// 1. Получаем запись из БД, чтобы узнать event_id
+	bookingToCancel, err := b.repo.GetBookingByID(bookingID)
+	if err != nil {
+		log.Printf("Ошибка получения записи для отмены: %v", err)
+		b.sendMessage(chatID, "Не удалось найти указанную запись.")
+		return
+	}
+
+	// 2. Удаляем событие из Google Calendar (если оно есть)
+	if bookingToCancel.EventID != nil {
+		if err := b.calendarSvc.DeleteEvent(*bookingToCancel.EventID); err != nil {
+			log.Printf("Ошибка удаления события из календаря: %v", err)
+			b.sendMessage(chatID, "Ошибка при отмене записи в календаре. Пожалуйста, попробуйте еще раз.")
+			// Не продолжаем, если не удалось удалить из календаря
+			return
+		}
+	}
+
+	// 3. Удаляем запись из нашей БД
+	if err := b.repo.DeleteBookingById(bookingID); err != nil {
+		log.Printf("КРИТИЧЕСКАЯ ОШИБКА: событие в календаре удалено, но не удалось удалить запись из БД: %v", err)
+		b.sendMessage(chatID, "Произошла критическая ошибка при отмене. Пожалуйста, свяжитесь с администратором.")
+		return
+	}
+
+	b.sendMessage(chatID, "Ваша запись успешно отменена.")
 }
 
 func (b *TgBot) sendMessage(chatID int64, text string) {
