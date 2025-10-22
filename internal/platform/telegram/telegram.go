@@ -14,11 +14,25 @@ import (
 
 const slotDuration = time.Hour
 
+// Состояния пользователя
+const (
+	StateDefault         = ""
+	StateAwaitingDate    = "awaiting_date"
+	StateAwaitingTime    = "awaiting_time"
+	StateAwaitingContact = "awaiting_contact"
+)
+
+type UserState struct {
+	State    string
+	TempData time.Time // Для хранения выбранной даты/времени
+}
+
 type TgBot struct {
 	api         *tgbot.BotAPI
 	cfg         *configs.Config
 	repo        *booking.BookingRepo
 	calendarSvc *calendar.CalendarService
+	userStates  map[int64]*UserState
 }
 
 func NewBot(api *tgbot.BotAPI, cfg *configs.Config, repo *booking.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
@@ -27,6 +41,7 @@ func NewBot(api *tgbot.BotAPI, cfg *configs.Config, repo *booking.BookingRepo, c
 		cfg:         cfg,
 		repo:        repo,
 		calendarSvc: calendarSvc,
+		userStates:  make(map[int64]*UserState),
 	}
 }
 
@@ -46,19 +61,28 @@ func (b *TgBot) Start() {
 }
 
 func (b *TgBot) processUpdate(update tgbot.Update) {
+	if update.Message == nil {
+		return
+	}
+
+	chatID := update.Message.Chat.ID
+	state, exists := b.userStates[chatID]
+
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {
-		case "start":
-			b.sendMainMenu(update.Message.Chat.ID)
-		case "help":
-			b.sendMainMenu(update.Message.Chat.ID)
+		case "start", "help":
+			b.userStates[chatID] = &UserState{State: StateDefault}
+			b.sendMainMenu(chatID)
 		default:
-			b.sendMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте /help для получения списка доступных команд.")
+			b.sendMessage(chatID, "Неизвестная команда. Используйте /help для получения списка доступных команд.")
 		}
+		return
+	}
+
+	if exists && state.State == StateAwaitingContact {
+		b.handleContactInput(update)
 	} else {
-		// Если это не команда, предполагаем, что это может быть ответ, который требует обработки в будущем
-		// Например, ввод номера телефона или имени
-		b.sendMessage(update.Message.Chat.ID, "Пожалуйста, используйте кнопки для взаимодействия с ботом.")
+		b.sendMessage(chatID, "Пожалуйста, используйте кнопки или команды.")
 	}
 }
 
@@ -90,6 +114,7 @@ func (b *TgBot) handleCallbackQuery(update tgbot.Update) {
 }
 
 func (b *TgBot) handleBookCommand(chatID int64) {
+	b.userStates[chatID] = &UserState{State: StateAwaitingDate}
 	// Предлагаем выбрать дату
 	var buttons [][]tgbot.InlineKeyboardButton
 	for i := 0; i < 7; i++ {
@@ -109,10 +134,13 @@ func (b *TgBot) handleBookCommand(chatID int64) {
 }
 
 func (b *TgBot) handleDateSelection(update tgbot.Update) {
+	chatID := update.CallbackQuery.Message.Chat.ID
+	b.userStates[chatID] = &UserState{State: StateAwaitingTime}
+
 	dateStr := strings.TrimPrefix(update.CallbackQuery.Data, "date_")
 	date, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		b.sendMessage(update.CallbackQuery.Message.Chat.ID, "Неверный формат даты.")
+		b.sendMessage(chatID, "Неверный формат даты.")
 		return
 	}
 
@@ -141,33 +169,52 @@ func (b *TgBot) handleDateSelection(update tgbot.Update) {
 }
 
 func (b *TgBot) handleTimeSelection(update tgbot.Update) {
+	chatID := update.CallbackQuery.Message.Chat.ID
 	timeStr := strings.TrimPrefix(update.CallbackQuery.Data, "time_")
 	slot, err := time.Parse(time.RFC3339, timeStr)
 	if err != nil {
-		b.sendMessage(update.CallbackQuery.Message.Chat.ID, "Неверный формат времени.")
+		b.sendMessage(chatID, "Неверный формат времени.")
 		return
 	}
 
-	chatID := update.CallbackQuery.Message.Chat.ID
-	userName := update.CallbackQuery.From.UserName
+	// Сохраняем выбранное время в состоянии пользователя
+	b.userStates[chatID] = &UserState{
+		State:    StateAwaitingContact,
+		TempData: slot,
+	}
 
-	// Повторная проверка, свободен ли слот, для предотвращения состояния гонки
+	b.sendMessage(chatID, "Пожалуйста, введите ваш номер телефона для связи.")
+}
+
+func (b *TgBot) handleContactInput(update tgbot.Update) {
+	chatID := update.Message.Chat.ID
+	contact := update.Message.Text
+	userName := update.Message.From.UserName
+
+	state, ok := b.userStates[chatID]
+	if !ok || state.State != StateAwaitingContact {
+		b.sendMessage(chatID, "Произошла ошибка состояния. Пожалуйста, начните заново с /start.")
+		return
+	}
+
+	slot := state.TempData
+
+	// Повторная проверка, свободен ли слот
 	isFree, err := b.calendarSvc.IsSlotFree(slot, slot.Add(slotDuration))
 	if err != nil {
 		log.Printf("Ошибка проверки доступности слота: %v", err)
 		b.sendMessage(chatID, "Произошла ошибка. Попробуйте снова.")
 		return
 	}
-
 	if !isFree {
 		b.sendMessage(chatID, "К сожалению, этот слот только что заняли. Пожалуйста, выберите другое время.")
-		// Опционально: можно заново отправить клавиатуру со свободными слотами
+		b.userStates[chatID] = &UserState{State: StateDefault} // Сброс состояния
 		return
 	}
 
 	// Создаем событие в Google Calendar
 	summary := fmt.Sprintf("Запись: %s", userName)
-	description := fmt.Sprintf("Запись на прием от пользователя %s.", userName)
+	description := fmt.Sprintf("Запись на прием от пользователя %s.\nКонтакт: %s", userName, contact)
 	link, eventID, err := b.calendarSvc.CreateEvent(summary, description, slot, slot.Add(slotDuration))
 	if err != nil {
 		log.Printf("Ошибка создания события в календаре: %v", err)
@@ -179,13 +226,12 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 	booking := &booking.Booking{
 		UserID:   chatID,
 		Name:     userName,
-		Contact:  "N/A", // Можно запросить дополнительно
+		Contact:  contact,
 		Datetime: slot,
 	}
 
 	if err := b.repo.CreateBooking(booking); err != nil {
 		log.Printf("Ошибка сохранения записи в БД: %v. Откатываем событие в календаре.", err)
-		// Пытаемся удалить событие из календаря
 		if delErr := b.calendarSvc.DeleteEvent(eventID); delErr != nil {
 			log.Printf("КРИТИЧЕСКАЯ ОШИБКА: не удалось откатить событие %s в календаре: %v", eventID, delErr)
 			b.sendMessage(chatID, "Произошла критическая ошибка. Пожалуйста, свяжитесь с администратором.")
@@ -197,6 +243,9 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 		response := fmt.Sprintf("Вы успешно записаны на %s.\nСсылка на событие: %s", slot.Format("02.01.2006 в 15:04"), link)
 		b.sendMessage(chatID, response)
 	}
+
+	// Сбрасываем состояние пользователя
+	delete(b.userStates, chatID)
 }
 
 func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
