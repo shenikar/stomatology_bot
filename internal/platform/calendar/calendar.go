@@ -44,7 +44,7 @@ func NewCalendarService(credentialFile, calendarID string) (*CalendarService, er
 }
 
 // CreateEvent создает новое событие в календаре
-func (s *CalendarService) CreateEvent(summary, description string, start, end time.Time) (string, error) {
+func (s *CalendarService) CreateEvent(summary, description string, start, end time.Time) (string, string, error) {
 	event := &calendar.Event{
 		Summary:     summary,
 		Description: description,
@@ -60,10 +60,10 @@ func (s *CalendarService) CreateEvent(summary, description string, start, end ti
 
 	event, err := s.srv.Events.Insert(s.calID, event).Do()
 	if err != nil {
-		return "", fmt.Errorf("unable to create event: %v", err)
+		return "", "", fmt.Errorf("unable to create event: %v", err)
 	}
 
-	return event.HtmlLink, nil
+	return event.HtmlLink, event.Id, nil
 }
 
 // GetFreeSlots возвращает список свободных слотов на определенный день
@@ -134,4 +134,13 @@ func (s *CalendarService) IsSlotFree(start time.Time, end time.Time) (bool, erro
 	}
 
 	return len(events.Items) == 0, nil
+}
+
+// DeleteEvent удаляет событие из календаря по его ID
+func (s *CalendarService) DeleteEvent(eventID string) error {
+	err := s.srv.Events.Delete(s.calID, eventID).Do()
+	if err != nil {
+		return fmt.Errorf("unable to delete event: %v", err)
+	}
+	return nil
 }

@@ -168,7 +168,7 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 	// Создаем событие в Google Calendar
 	summary := fmt.Sprintf("Запись: %s", userName)
 	description := fmt.Sprintf("Запись на прием от пользователя %s.", userName)
-	link, err := b.calendarSvc.CreateEvent(summary, description, slot, slot.Add(slotDuration))
+	link, eventID, err := b.calendarSvc.CreateEvent(summary, description, slot, slot.Add(slotDuration))
 	if err != nil {
 		log.Printf("Ошибка создания события в календаре: %v", err)
 		b.sendMessage(chatID, "Не удалось создать запись. Попробуйте позже.")
@@ -184,9 +184,15 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 	}
 
 	if err := b.repo.CreateBooking(booking); err != nil {
-		// Здесь можно было бы добавить логику отката события в календаре,
-		// но для простоты пока опустим.
-		b.sendMessage(chatID, "Ошибка при сохранении записи в базу данных. Попробуйте снова.")
+		log.Printf("Ошибка сохранения записи в БД: %v. Откатываем событие в календаре.", err)
+		// Пытаемся удалить событие из календаря
+		if delErr := b.calendarSvc.DeleteEvent(eventID); delErr != nil {
+			log.Printf("КРИТИЧЕСКАЯ ОШИБКА: не удалось откатить событие %s в календаре: %v", eventID, delErr)
+			b.sendMessage(chatID, "Произошла критическая ошибка. Пожалуйста, свяжитесь с администратором.")
+		} else {
+			log.Printf("Событие %s успешно удалено из календаря.", eventID)
+			b.sendMessage(chatID, "Ошибка при сохранении записи в базу данных. Попробуйте снова.")
+		}
 	} else {
 		response := fmt.Sprintf("Вы успешно записаны на %s.\nСсылка на событие: %s", slot.Format("02.01.2006 в 15:04"), link)
 		b.sendMessage(chatID, response)
