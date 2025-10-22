@@ -19,12 +19,15 @@ const (
 	StateDefault         = ""
 	StateAwaitingDate    = "awaiting_date"
 	StateAwaitingTime    = "awaiting_time"
+	StateAwaitingName    = "awaiting_name"
 	StateAwaitingContact = "awaiting_contact"
 )
 
 type UserState struct {
-	State    string
-	TempData time.Time // Для хранения выбранной даты/времени
+	State     string
+	TempTime  time.Time // Для хранения выбранной даты/времени
+	TempName  string    // Для хранения имени
+	TempEvent string    // Для хранения ID события календаря
 }
 
 type TgBot struct {
@@ -79,11 +82,18 @@ func (b *TgBot) processUpdate(update tgbot.Update) {
 		return
 	}
 
-	if exists && state.State == StateAwaitingContact {
-		b.handleContactInput(update)
-	} else {
-		b.sendMessage(chatID, "Пожалуйста, используйте кнопки или команды.")
+	if exists {
+		switch state.State {
+		case StateAwaitingName:
+			b.handleNameInput(update)
+			return
+		case StateAwaitingContact:
+			b.handleContactInput(update)
+			return
+		}
 	}
+
+	b.sendMessage(chatID, "Пожалуйста, используйте кнопки или команды.")
 }
 
 func (b *TgBot) handleCallbackQuery(update tgbot.Update) {
@@ -177,19 +187,42 @@ func (b *TgBot) handleTimeSelection(update tgbot.Update) {
 		return
 	}
 
-	// Сохраняем выбранное время в состоянии пользователя
+	// Сохраняем выбранное время и переходим к запросу имени
 	b.userStates[chatID] = &UserState{
-		State:    StateAwaitingContact,
-		TempData: slot,
+		State:    StateAwaitingName,
+		TempTime: slot,
 	}
 
-	b.sendMessage(chatID, "Пожалуйста, введите ваш номер телефона для связи.")
+	b.sendMessage(chatID, "Пожалуйста, введите ваше Имя и Фамилию.")
+}
+
+func (b *TgBot) handleNameInput(update tgbot.Update) {
+	chatID := update.Message.Chat.ID
+	name := update.Message.Text
+
+	state, ok := b.userStates[chatID]
+	if !ok || state.State != StateAwaitingName {
+		b.sendMessage(chatID, "Произошла ошибка состояния. Пожалуйста, начните заново с /start.")
+		return
+	}
+
+	// Сохраняем имя и переходим к запросу контакта
+	state.State = StateAwaitingContact
+	state.TempName = name
+	b.userStates[chatID] = state
+
+	b.sendMessage(chatID, "Спасибо! Теперь, пожалуйста, введите ваш номер телефона для связи.")
 }
 
 func (b *TgBot) handleContactInput(update tgbot.Update) {
 	chatID := update.Message.Chat.ID
 	contact := update.Message.Text
-	userName := update.Message.From.UserName
+
+	// Валидация номера телефона
+	if !strings.HasPrefix(contact, "+7") || len(contact) != 12 {
+		b.sendMessage(chatID, "Неверный формат номера. Пожалуйста, введите номер в формате +7XXXXXXXXXX (12 цифр).")
+		return // Оставляем пользователя в том же состоянии, чтобы он мог повторить ввод
+	}
 
 	state, ok := b.userStates[chatID]
 	if !ok || state.State != StateAwaitingContact {
@@ -197,7 +230,8 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 		return
 	}
 
-	slot := state.TempData
+	userName := state.TempName // Используем сохраненное имя
+	slot := state.TempTime
 
 	// Повторная проверка, свободен ли слот
 	isFree, err := b.calendarSvc.IsSlotFree(slot, slot.Add(slotDuration))
