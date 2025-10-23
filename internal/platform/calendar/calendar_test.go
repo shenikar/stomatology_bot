@@ -14,13 +14,13 @@ import (
 	"google.golang.org/api/option"
 )
 
-func newTestCalendarService(serverURL string) (*CalendarService, error) {
+func newTestCalendarService(serverURL string) (*Service, error) {
 	ctx := context.Background()
 	srv, err := calendar.NewService(ctx, option.WithEndpoint(serverURL), option.WithoutAuthentication())
 	if err != nil {
 		return nil, err
 	}
-	return &CalendarService{
+	return &Service{
 		srv:           srv,
 		calID:         gofakeit.UUID(),
 		workStartHour: 9,
@@ -29,7 +29,7 @@ func newTestCalendarService(serverURL string) (*CalendarService, error) {
 }
 
 func TestCalendarService_GetFreeSlots(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Пример ответа от Google Calendar API
 		response := `{
 			"items": [
@@ -62,7 +62,7 @@ func TestCalendarService_GetFreeSlots(t *testing.T) {
 }
 
 func TestCalendarService_CreateEvent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		response := fmt.Sprintf(`{
 			"id": "%s",
 			"htmlLink": "%s"
@@ -83,7 +83,7 @@ func TestCalendarService_CreateEvent(t *testing.T) {
 }
 
 func TestCalendarService_DeleteEvent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// При успешном удалении Google API возвращает пустой ответ со статусом 204
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -97,7 +97,7 @@ func TestCalendarService_DeleteEvent(t *testing.T) {
 }
 
 func TestCalendarService_GetFreeSlots_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -111,7 +111,7 @@ func TestCalendarService_GetFreeSlots_Error(t *testing.T) {
 }
 
 func TestCalendarService_CreateEvent_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -125,7 +125,7 @@ func TestCalendarService_CreateEvent_Error(t *testing.T) {
 }
 
 func TestCalendarService_IsSlotFree(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		response := `{"items": []}`
 		fmt.Fprintln(w, response)
 	}))
@@ -141,7 +141,7 @@ func TestCalendarService_IsSlotFree(t *testing.T) {
 }
 
 func TestCalendarService_IsSlotFree_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -156,12 +156,12 @@ func TestCalendarService_IsSlotFree_Error(t *testing.T) {
 
 func TestNewCalendarService_Error(t *testing.T) {
 	// Тест на ошибку чтения файла credentials
-	_, err := NewCalendarService("non-existent-file.json", "test-id", 9, 18)
+	_, err := NewService("non-existent-file.json", "test-id", 9, 18)
 	assert.Error(t, err)
 }
 
 func TestCalendarService_GetFreeSlots_InvalidDate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		// Ответ не важен, так как мы ожидаем ошибку до запроса
 	}))
 	defer server.Close()
@@ -176,7 +176,7 @@ func TestCalendarService_GetFreeSlots_InvalidDate(t *testing.T) {
 }
 
 func TestCalendarService_DeleteEvent_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()

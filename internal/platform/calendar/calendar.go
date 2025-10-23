@@ -12,15 +12,15 @@ import (
 )
 
 // CalendarService - сервис для работы с Google Calendar
-type CalendarService struct {
+type Service struct {
 	srv           *calendar.Service
 	calID         string
 	workStartHour int
 	workEndHour   int
 }
 
-// NewCalendarService создает новый сервис для работы с календарем
-func NewCalendarService(credentialFile, calendarID string, workStartHour, workEndHour int) (*CalendarService, error) {
+// NewService создает новый сервис для работы с календарем
+func NewService(credentialFile, calendarID string, workStartHour, workEndHour int) (*Service, error) {
 	ctx := context.Background()
 	b, err := os.ReadFile(credentialFile)
 	if err != nil {
@@ -39,7 +39,7 @@ func NewCalendarService(credentialFile, calendarID string, workStartHour, workEn
 		return nil, fmt.Errorf("unable to retrieve Calendar client: %v", err)
 	}
 
-	return &CalendarService{
+	return &Service{
 		srv:           srv,
 		calID:         calendarID,
 		workStartHour: workStartHour,
@@ -48,7 +48,7 @@ func NewCalendarService(credentialFile, calendarID string, workStartHour, workEn
 }
 
 // CreateEvent создает новое событие в календаре
-func (s *CalendarService) CreateEvent(summary, description string, start, end time.Time) (string, string, error) {
+func (s *Service) CreateEvent(summary, description string, start, end time.Time) (string, string, error) {
 	event := &calendar.Event{
 		Summary:     summary,
 		Description: description,
@@ -71,7 +71,7 @@ func (s *CalendarService) CreateEvent(summary, description string, start, end ti
 }
 
 // GetFreeSlots возвращает список свободных слотов на определенный день
-func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
+func (s *Service) GetFreeSlots(date time.Time) ([]time.Time, error) {
 	// Устанавливаем начало и конец дня
 	loc, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
 }
 
 // IsSlotFree проверяет, свободен ли временной слот
-func (s *CalendarService) IsSlotFree(start time.Time, end time.Time) (bool, error) {
+func (s *Service) IsSlotFree(start time.Time, end time.Time) (bool, error) {
 	events, err := s.srv.Events.List(s.calID).
 		TimeMin(start.Format(time.RFC3339)).
 		TimeMax(end.Format(time.RFC3339)).
@@ -137,7 +137,7 @@ func (s *CalendarService) IsSlotFree(start time.Time, end time.Time) (bool, erro
 }
 
 // DeleteEvent удаляет событие из календаря по его ID
-func (s *CalendarService) DeleteEvent(eventID string) error {
+func (s *Service) DeleteEvent(eventID string) error {
 	err := s.srv.Events.Delete(s.calID, eventID).Do()
 	if err != nil {
 		return fmt.Errorf("unable to delete event: %v", err)

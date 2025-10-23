@@ -14,7 +14,7 @@ func TestBookingRepo_CreateBooking(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	eventID := gofakeit.UUID()
 	booking := &Booking{
@@ -40,7 +40,7 @@ func TestBookingRepo_GetBookingByID(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	bookingID := int(gofakeit.Int64())
 	eventID := gofakeit.UUID()
@@ -55,7 +55,7 @@ func TestBookingRepo_GetBookingByID(t *testing.T) {
 	booking, err := repo.GetBookingByID(bookingID)
 	assert.NoError(t, err)
 	assert.NotNil(t, booking)
-	assert.Equal(t, int(bookingID), booking.ID)
+	assert.Equal(t, bookingID, booking.ID)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -65,7 +65,7 @@ func TestBookingRepo_DeleteBookingById(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	bookingID := int(gofakeit.Int64())
 
@@ -73,7 +73,7 @@ func TestBookingRepo_DeleteBookingById(t *testing.T) {
 		WithArgs(bookingID).
 		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
-	err = repo.DeleteBookingById(bookingID)
+	err = repo.DeleteBookingByID(bookingID)
 	assert.NoError(t, err)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -84,7 +84,7 @@ func TestBookingRepo_GetUserBookings(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	userID := gofakeit.Int64()
 	eventID1 := gofakeit.UUID()
@@ -111,7 +111,7 @@ func TestBookingRepo_GetAllBooking(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	eventID1 := gofakeit.UUID()
 	eventID2 := gofakeit.UUID()
@@ -136,7 +136,7 @@ func TestBookingRepo_CreateBooking_Error(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 
 	eventID := gofakeit.UUID()
 	booking := &Booking{
@@ -162,7 +162,7 @@ func TestBookingRepo_GetUserBookings_Error(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 	userID := gofakeit.Int64()
 
 	mock.ExpectQuery(`SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE user_id = \$1`).
@@ -180,7 +180,7 @@ func TestBookingRepo_GetBookingByID_Error(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 	bookingID := int(gofakeit.Int64())
 
 	mock.ExpectQuery(`SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE id = \$1`).
@@ -198,14 +198,14 @@ func TestBookingRepo_DeleteBookingById_Error(t *testing.T) {
 	assert.NoError(t, err)
 	defer mock.Close(context.Background())
 
-	repo := NewBookingRepo(mock)
+	repo := NewRepo(mock)
 	bookingID := int(gofakeit.Int64())
 
 	mock.ExpectExec(`DELETE FROM bookings WHERE id = \$1`).
 		WithArgs(bookingID).
 		WillReturnError(assert.AnError)
 
-	err = repo.DeleteBookingById(bookingID)
+	err = repo.DeleteBookingByID(bookingID)
 	assert.Error(t, err)
 
 	assert.NoError(t, mock.ExpectationsWereMet())

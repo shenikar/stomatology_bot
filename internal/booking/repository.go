@@ -14,15 +14,15 @@ type DBConnection interface {
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 }
 
-type BookingRepo struct {
+type Repo struct {
 	conn DBConnection
 }
 
-func NewBookingRepo(conn DBConnection) *BookingRepo {
-	return &BookingRepo{conn: conn}
+func NewRepo(conn DBConnection) *Repo {
+	return &Repo{conn: conn}
 }
 
-func (r *BookingRepo) CreateBooking(booking *Booking) error {
+func (r *Repo) CreateBooking(booking *Booking) error {
 	query := `
 	INSERT INTO bookings (user_id, name, contact, datetime, event_id)
 	VALUES ($1, $2, $3, $4, $5)
@@ -32,7 +32,7 @@ func (r *BookingRepo) CreateBooking(booking *Booking) error {
 	return err
 }
 
-func (r *BookingRepo) GetAllBooking() ([]Booking, error) {
+func (r *Repo) GetAllBooking() ([]Booking, error) {
 	var bookings []Booking
 	query := `
 		SELECT id, name, contact, datetime, event_id FROM bookings`
@@ -54,13 +54,13 @@ func (r *BookingRepo) GetAllBooking() ([]Booking, error) {
 	return bookings, rows.Err()
 }
 
-func (r *BookingRepo) DeleteBookingById(id int) error {
+func (r *Repo) DeleteBookingByID(id int) error {
 	query := `DELETE FROM bookings WHERE id = $1`
 	_, err := r.conn.Exec(context.Background(), query, id)
 	return err
 }
 
-func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
+func (r *Repo) GetUserBookings(userID int64) ([]Booking, error) {
 	var bookings []Booking
 	// Используем $1 вместо ?
 	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE user_id = $1"
@@ -90,7 +90,7 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 	return bookings, nil
 }
 
-func (r *BookingRepo) GetBookingByID(id int) (*Booking, error) {
+func (r *Repo) GetBookingByID(id int) (*Booking, error) {
 	var booking Booking
 	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE id = $1"
 	var eventID *string

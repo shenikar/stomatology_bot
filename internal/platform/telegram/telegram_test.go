@@ -21,7 +21,7 @@ func (m *MockBotAPI) Send(c tgbot.Chattable) (tgbot.Message, error) {
 	return args.Get(0).(tgbot.Message), args.Error(1)
 }
 
-func (m *MockBotAPI) GetUpdatesChan(config tgbot.UpdateConfig) tgbot.UpdatesChannel {
+func (m *MockBotAPI) GetUpdatesChan(_ tgbot.UpdateConfig) tgbot.UpdatesChannel {
 	// Для тестов нам не нужно получать реальные обновления
 	return make(chan tgbot.Update)
 }
@@ -76,7 +76,7 @@ func (m *MockBookingRepo) GetBookingByID(id int) (*booking.Booking, error) {
 	return args.Get(0).(*booking.Booking), args.Error(1)
 }
 
-func (m *MockBookingRepo) DeleteBookingById(id int) error {
+func (m *MockBookingRepo) DeleteBookingByID(id int) error {
 	args := m.Called(id)
 	return args.Error(0)
 }

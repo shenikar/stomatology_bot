@@ -1,16 +1,16 @@
 package database
 
 import (
-	"stomatology_bot/configs"
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"stomatology_bot/configs"
 
+	"github.com/sirupsen/logrus"
 
 	"github.com/jackc/pgx/v5"
 )
 
-func GetConnect(dbConfig configs.DbConfig) (*pgx.Conn, error) {
+func GetConnect(dbConfig configs.DBConfig) (*pgx.Conn, error) {
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbConfig.User, dbConfig.Password, dbConfig.Host, dbConfig.Port, dbConfig.Name)
 
 	conn, err := pgx.Connect(context.Background(), dbURL)
@@ -19,5 +19,4 @@ func GetConnect(dbConfig configs.DbConfig) (*pgx.Conn, error) {
 	}
 	logrus.Info("Connect database")
 	return conn, nil
-
 }

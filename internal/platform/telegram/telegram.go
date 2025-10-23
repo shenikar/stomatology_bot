@@ -40,12 +40,12 @@ type BotAPI interface {
 type TgBot struct {
 	api         BotAPI
 	cfg         *configs.Config
-	repo        *booking.BookingRepo
-	calendarSvc *calendar.CalendarService
+	repo        *booking.Repo
+	calendarSvc *calendar.Service
 	userStates  map[int64]*UserState
 }
 
-func NewBot(api BotAPI, cfg *configs.Config, repo *booking.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
+func NewBot(api BotAPI, cfg *configs.Config, repo *booking.Repo, calendarSvc *calendar.Service) *TgBot {
 	return &TgBot{
 		api:         api,
 		cfg:         cfg,
@@ -65,7 +65,7 @@ func (b *TgBot) Start() {
 		if update.Message != nil {
 			go b.processUpdate(update)
 		} else if update.CallbackQuery != nil {
-			go b.handleCallbackQuery(update) // Добавили обработку CallbackQuery
+			go b.handleCallbackQuery(update)
 		}
 	}
 }
@@ -110,7 +110,9 @@ func (b *TgBot) handleCallbackQuery(update tgbot.Update) {
 
 	// Отправляем "typing" статус
 	callback := tgbot.NewCallback(update.CallbackQuery.ID, "")
-	b.api.Request(callback)
+	if _, err := b.api.Request(callback); err != nil {
+		logrus.WithError(err).Error("Failed to send callback request")
+	}
 
 	chatID := update.CallbackQuery.Message.Chat.ID
 
@@ -157,7 +159,9 @@ func (b *TgBot) handleBookCommand(chatID int64) {
 	keyboard := tgbot.NewInlineKeyboardMarkup(buttons...)
 	msg := tgbot.NewMessage(chatID, "Выберите дату для записи:")
 	msg.ReplyMarkup = keyboard
-	b.api.Send(msg)
+	if _, err := b.api.Send(msg); err != nil {
+		logrus.WithError(err).WithField("chatID", chatID).Error("Failed to send message")
+	}
 }
 
 func (b *TgBot) handleDateSelection(update tgbot.Update) {
@@ -192,7 +196,9 @@ func (b *TgBot) handleDateSelection(update tgbot.Update) {
 	keyboard := tgbot.NewInlineKeyboardMarkup(buttons...)
 	msg := tgbot.NewMessage(update.CallbackQuery.Message.Chat.ID, "Выберите время для записи:")
 	msg.ReplyMarkup = keyboard
-	b.api.Send(msg)
+	if _, err := b.api.Send(msg); err != nil {
+		logrus.WithError(err).WithField("chatID", update.CallbackQuery.Message.Chat.ID).Error("Failed to send message")
+	}
 }
 
 func (b *TgBot) handleTimeSelection(update tgbot.Update) {
@@ -320,11 +326,12 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 
 func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 	var chatID int64
-	if update.Message != nil {
+	switch {
+	case update.Message != nil:
 		chatID = update.Message.Chat.ID
-	} else if update.CallbackQuery != nil {
+	case update.CallbackQuery != nil:
 		chatID = update.CallbackQuery.Message.Chat.ID
-	} else {
+	default:
 		return // Не можем определить чат
 	}
 
@@ -362,7 +369,9 @@ func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 		)
 		msg := tgbot.NewMessage(chatID, response.String())
 		msg.ReplyMarkup = keyboard
-		b.api.Send(msg)
+		if _, err := b.api.Send(msg); err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).Error("Failed to send message")
+		}
 		response.Reset() // Очищаем builder для следующей записи
 	}
 }
@@ -396,7 +405,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 	}
 
 	// 3. Удаляем запись из нашей БД
-	if err := b.repo.DeleteBookingById(bookingID); err != nil {
+	if err := b.repo.DeleteBookingByID(bookingID); err != nil {
 		logrus.WithError(err).WithField("bookingID", bookingID).Error("CRITICAL: failed to delete booking from DB after calendar event was deleted")
 		b.sendMessage(chatID, "Произошла критическая ошибка при отмене. Пожалуйста, свяжитесь с администратором.")
 		return
@@ -421,5 +430,7 @@ func (b *TgBot) sendMainMenu(chatID int64) {
 		),
 	)
 	msg.ReplyMarkup = keyboard
-	b.api.Send(msg)
+	if _, err := b.api.Send(msg); err != nil {
+		logrus.WithError(err).WithField("chatID", chatID).Error("Failed to send message")
+	}
 }

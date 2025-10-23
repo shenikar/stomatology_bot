@@ -23,7 +23,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load config")
 	}
 	logger.SetupLogger(cfg.LogLevel)
-	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", cfg.Db.User, cfg.Db.Password, cfg.Db.Host, cfg.Db.Port, cfg.Db.Name)
+	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name)
 
 	// Применение миграций
 	{
@@ -49,25 +49,24 @@ func main() {
 	}
 
 	// Основное подключение к БД
-	pgxConn, err := database.GetConnect(cfg.Db)
+	pgxConn, err := database.GetConnect(cfg.DB)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to connect to database")
 	}
-	repo := booking.NewBookingRepo(pgxConn)
+	repo := booking.NewRepo(pgxConn)
 
-	calendarSvc, err := calendar.NewCalendarService("credentials.json", cfg.Telegram.CalendarID, cfg.Telegram.WorkStartHour, cfg.Telegram.WorkEndHour)
+	calendarSvc, err := calendar.NewService("credentials.json", cfg.Telegram.CalendarID, cfg.Telegram.WorkStartHour, cfg.Telegram.WorkEndHour)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create calendar service")
 	}
 
-	botApi, err := tgbot.NewBotAPI(cfg.Telegram.Token)
+	botAPI, err := tgbot.NewBotAPI(cfg.Telegram.Token)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create bot API")
 	}
-	botApi.Debug = true
-	logrus.Infof("Authorized on account %s", botApi.Self.UserName)
+	botAPI.Debug = true
+	logrus.Infof("Authorized on account %s", botAPI.Self.UserName)
 
-	bot := telegram.NewBot(botApi, cfg, repo, calendarSvc)
+	bot := telegram.NewBot(botAPI, cfg, repo, calendarSvc)
 	bot.Start()
-
 }
