@@ -2,6 +2,7 @@ package booking
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -73,7 +74,7 @@ func (r *Repo) GetUserBookings(userID int64) ([]Booking, error) {
 
 	for rows.Next() {
 		var booking Booking
-		var eventID *string // Используем *string для сканирования
+		var eventID *string
 		if err := rows.Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime, &eventID); err != nil {
 			logrus.WithError(err).Error("Failed to scan row in GetUserBookings")
 			continue
@@ -100,4 +101,27 @@ func (r *Repo) GetBookingByID(id int) (*Booking, error) {
 	}
 	booking.EventID = eventID
 	return &booking, nil
+}
+
+func (r *Repo) GetUpcomingBookings(from, to time.Time) ([]Booking, error) {
+	var bookings []Booking
+	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE datetime >= $1 AND datetime < $2 AND user_id IS NOT NULL"
+	rows, err := r.conn.Query(context.Background(), query, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var booking Booking
+		var eventID *string
+		if err := rows.Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime, &eventID); err != nil {
+			logrus.WithError(err).Error("Failed to scan row in GetUpcomingBookings")
+			continue
+		}
+		booking.EventID = eventID
+		bookings = append(bookings, booking)
+	}
+
+	return bookings, rows.Err()
 }

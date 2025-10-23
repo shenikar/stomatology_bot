@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-co-op/gocron/v2"
 	tgbot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
 )
@@ -56,17 +57,76 @@ func NewBot(api BotAPI, cfg *configs.Config, repo *booking.Repo, calendarSvc *ca
 }
 
 func (b *TgBot) Start() {
+	go b.startReminderCron()
+
 	u := tgbot.NewUpdate(0)
 	u.Timeout = 60
 	updates := b.api.GetUpdatesChan(u)
 
 	// Обрабатываем обновления
 	for update := range updates {
-		if update.Message != nil {
+		switch {
+		case update.Message != nil:
 			go b.processUpdate(update)
-		} else if update.CallbackQuery != nil {
+		case update.CallbackQuery != nil:
 			go b.handleCallbackQuery(update)
 		}
+	}
+}
+
+func (b *TgBot) startReminderCron() {
+	s, err := gocron.NewScheduler()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create scheduler")
+		return
+	}
+
+	// Отправляем напоминания каждый день в 9 утра
+	_, err = s.NewJob(
+		gocron.CronJob(
+			"0 8 * * *", // Каждую минуту для теста
+			false,
+		),
+		gocron.NewTask(b.sendReminders),
+	)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create cron job")
+		return
+	}
+	s.Start()
+	logrus.Info("Reminder cron job started")
+}
+
+func (b *TgBot) sendReminders() {
+	logrus.Info("Running reminder job")
+
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to load location for reminders")
+		return
+	}
+
+	now := time.Now().In(loc)
+	tomorrow := now.Add(24 * time.Hour)
+
+	from := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
+	to := from.Add(24 * time.Hour)
+
+	bookings, err := b.repo.GetUpcomingBookings(from, to)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get upcoming bookings")
+		return
+	}
+
+	for _, booking := range bookings {
+		loc, err := time.LoadLocation("Europe/Moscow")
+		if err != nil {
+			logrus.WithError(err).Error("Failed to load location for reminder message")
+			continue
+		}
+		localTime := booking.Datetime.In(loc)
+		msg := fmt.Sprintf("Напоминание: у вас завтра запись на %s", localTime.Format("15:04"))
+		b.sendMessage(booking.UserID, msg)
 	}
 }
 
