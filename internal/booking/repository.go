@@ -4,14 +4,21 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sirupsen/logrus"
 )
 
-type BookingRepo struct {
-	conn *pgx.Conn
+type DBConnection interface {
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 }
 
-func NewBookingRepo(conn *pgx.Conn) *BookingRepo {
+type BookingRepo struct {
+	conn DBConnection
+}
+
+func NewBookingRepo(conn DBConnection) *BookingRepo {
 	return &BookingRepo{conn: conn}
 }
 

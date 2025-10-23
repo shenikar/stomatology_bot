@@ -31,15 +31,21 @@ type UserState struct {
 	TempEvent string    // Для хранения ID события календаря
 }
 
+type BotAPI interface {
+	Send(c tgbot.Chattable) (tgbot.Message, error)
+	Request(c tgbot.Chattable) (*tgbot.APIResponse, error)
+	GetUpdatesChan(config tgbot.UpdateConfig) tgbot.UpdatesChannel
+}
+
 type TgBot struct {
-	api         *tgbot.BotAPI
+	api         BotAPI
 	cfg         *configs.Config
 	repo        *booking.BookingRepo
 	calendarSvc *calendar.CalendarService
 	userStates  map[int64]*UserState
 }
 
-func NewBot(api *tgbot.BotAPI, cfg *configs.Config, repo *booking.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
+func NewBot(api BotAPI, cfg *configs.Config, repo *booking.BookingRepo, calendarSvc *calendar.CalendarService) *TgBot {
 	return &TgBot{
 		api:         api,
 		cfg:         cfg,
