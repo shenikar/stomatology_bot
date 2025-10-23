@@ -13,12 +13,14 @@ import (
 
 // CalendarService - сервис для работы с Google Calendar
 type CalendarService struct {
-	srv   *calendar.Service
-	calID string
+	srv           *calendar.Service
+	calID         string
+	workStartHour int
+	workEndHour   int
 }
 
 // NewCalendarService создает новый сервис для работы с календарем
-func NewCalendarService(credentialFile, calendarID string) (*CalendarService, error) {
+func NewCalendarService(credentialFile, calendarID string, workStartHour, workEndHour int) (*CalendarService, error) {
 	ctx := context.Background()
 	b, err := os.ReadFile(credentialFile)
 	if err != nil {
@@ -38,8 +40,10 @@ func NewCalendarService(credentialFile, calendarID string) (*CalendarService, er
 	}
 
 	return &CalendarService{
-		srv:   srv,
-		calID: calendarID,
+		srv:           srv,
+		calID:         calendarID,
+		workStartHour: workStartHour,
+		workEndHour:   workEndHour,
 	}, nil
 }
 
@@ -87,14 +91,10 @@ func (s *CalendarService) GetFreeSlots(date time.Time) ([]time.Time, error) {
 		return nil, fmt.Errorf("unable to retrieve next ten of the user's events: %v", err)
 	}
 
-	// Определяем рабочие часы (например, с 9:00 до 18:00)
-	workStartHour := 9
-	workEndHour := 18
-
 	var freeSlots []time.Time
 
 	// Генерируем все возможные слоты в течение рабочего дня
-	for hour := workStartHour; hour < workEndHour; hour++ {
+	for hour := s.workStartHour; hour <= s.workEndHour; hour++ {
 		slot := time.Date(date.Year(), date.Month(), date.Day(), hour, 0, 0, 0, loc)
 		isBusy := false
 

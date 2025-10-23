@@ -53,7 +53,7 @@ func main() {
 	}
 	repo := booking.NewBookingRepo(pgxConn)
 
-	calendarSvc, err := calendar.NewCalendarService("credentials.json", cfg.Telegram.CalendarID)
+	calendarSvc, err := calendar.NewCalendarService("credentials.json", cfg.Telegram.CalendarID, cfg.Telegram.WorkStartHour, cfg.Telegram.WorkEndHour)
 	if err != nil {
 		log.Fatal(err)
 	}
