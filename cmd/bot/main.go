@@ -64,6 +64,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create bot API")
 	}
+
+	// Перенаправляем логгер telegram-bot-api в logrus
+	tgbot.SetLogger(logrus.StandardLogger())
+
 	botAPI.Debug = true
 	logrus.Infof("Authorized on account %s", botAPI.Self.UserName)
 
