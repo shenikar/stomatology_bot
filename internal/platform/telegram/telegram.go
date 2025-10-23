@@ -278,8 +278,19 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 			b.sendMessage(chatID, "Ошибка при сохранении записи в базу данных. Попробуйте снова.")
 		}
 	} else {
-		response := fmt.Sprintf("Вы успешно записаны на %s.\nСсылка на событие: %s", slot.Format("02.01.2006 в 15:04"), link)
-		b.sendMessage(chatID, response)
+		// Сообщение для пользователя
+		userResponse := fmt.Sprintf("Вы успешно записаны на %s.", slot.Format("02.01.2006 в 15:04"))
+		b.sendMessage(chatID, userResponse)
+
+		// Сообщение для админа
+		adminID, err := strconv.ParseInt(b.cfg.Telegram.AdminID, 10, 64)
+		if err != nil {
+			log.Printf("Не удалось конвертировать ADMIN_ID: %v", err)
+		} else {
+			adminResponse := fmt.Sprintf("Новая запись:\n\nИмя: %s\nКонтакт: %s\nДата: %s\n\nСсылка на событие: %s",
+				userName, contact, slot.Format("02.01.2006 в 15:04"), link)
+			b.sendMessage(adminID, adminResponse)
+		}
 	}
 
 	// Сбрасываем состояние пользователя

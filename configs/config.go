@@ -14,6 +14,7 @@ type Config struct {
 type TelegramConfig struct {
 	Token      string
 	CalendarID string
+	AdminID    string
 }
 type DbConfig struct {
 	User     string
@@ -30,6 +31,7 @@ func LoadConfig() (*Config, error) {
 	telegramConfig := TelegramConfig{
 		Token:      os.Getenv("BOT_TOKEN"),
 		CalendarID: os.Getenv("CALENDAR_ID"),
+		AdminID:    os.Getenv("ADMIN_ID"),
 	}
 	dbConfig := DbConfig{
 		User:     os.Getenv("DB_USER"),
