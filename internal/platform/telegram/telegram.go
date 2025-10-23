@@ -130,7 +130,9 @@ func (b *TgBot) handleBookCommand(chatID int64) {
 	b.userStates[chatID] = &UserState{State: StateAwaitingDate}
 	// Предлагаем выбрать дату
 	var buttons [][]tgbot.InlineKeyboardButton
-	for i := 0; i < 7; i++ {
+
+	// Итерируемся 30 дней вперед от сегодня
+	for i := 0; i < 30; i++ {
 		date := time.Now().AddDate(0, 0, i)
 		// Пропускаем воскресенье
 		if date.Weekday() == time.Sunday {
