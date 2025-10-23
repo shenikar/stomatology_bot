@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Telegram TelegramConfig
 	Db       DbConfig
+	LogLevel string
 }
 type TelegramConfig struct {
 	Token      string
@@ -48,6 +49,7 @@ func LoadConfig() (*Config, error) {
 	return &Config{
 		Telegram: telegramConfig,
 		Db:       dbConfig,
+		LogLevel: os.Getenv("LOG_LEVEL"),
 	}, nil
 }
 

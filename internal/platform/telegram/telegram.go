@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"fmt"
-	"log"
 	"stomatology_bot/configs"
 	"stomatology_bot/internal/booking"
 	"stomatology_bot/internal/platform/calendar"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	tgbot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/sirupsen/logrus"
 )
 
 const slotDuration = time.Hour
@@ -131,9 +131,15 @@ func (b *TgBot) handleBookCommand(chatID int64) {
 	// Предлагаем выбрать дату
 	var buttons [][]tgbot.InlineKeyboardButton
 
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to load location")
+		b.sendMessage(chatID, "Произошла ошибка сервера, не удалось получить даты.")
+		return
+	}
 	// Итерируемся 30 дней вперед от сегодня
 	for i := 0; i < 30; i++ {
-		date := time.Now().AddDate(0, 0, i)
+		date := time.Now().In(loc).AddDate(0, 0, i)
 		// Пропускаем воскресенье
 		if date.Weekday() == time.Sunday {
 			continue
@@ -161,7 +167,7 @@ func (b *TgBot) handleDateSelection(update tgbot.Update) {
 
 	freeSlots, err := b.calendarSvc.GetFreeSlots(date)
 	if err != nil {
-		log.Printf("Ошибка получения свободных слотов: %v", err)
+		logrus.WithError(err).WithField("date", date).Error("Failed to get free slots")
 		b.sendMessage(update.CallbackQuery.Message.Chat.ID, "Не удалось получить свободные слоты. Попробуйте позже.")
 		return
 	}
@@ -241,7 +247,7 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 	// Повторная проверка, свободен ли слот
 	isFree, err := b.calendarSvc.IsSlotFree(slot, slot.Add(slotDuration))
 	if err != nil {
-		log.Printf("Ошибка проверки доступности слота: %v", err)
+		logrus.WithError(err).WithField("slot", slot).Error("Failed to check slot availability")
 		b.sendMessage(chatID, "Произошла ошибка. Попробуйте снова.")
 		return
 	}
@@ -256,7 +262,11 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 	description := fmt.Sprintf("Запись на прием от пользователя %s.\nКонтакт: %s", userName, contact)
 	link, eventID, err := b.calendarSvc.CreateEvent(summary, description, slot, slot.Add(slotDuration))
 	if err != nil {
-		log.Printf("Ошибка создания события в календаре: %v", err)
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"summary":     summary,
+			"description": description,
+			"slot":        slot,
+		}).Error("Failed to create calendar event")
 		b.sendMessage(chatID, "Не удалось создать запись. Попробуйте позже.")
 		return
 	}
@@ -271,12 +281,15 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 	}
 
 	if err := b.repo.CreateBooking(booking); err != nil {
-		log.Printf("Ошибка сохранения записи в БД: %v. Откатываем событие в календаре.", err)
+		logrus.WithError(err).WithField("booking", booking).Error("Failed to create booking in DB, rolling back calendar event")
 		if delErr := b.calendarSvc.DeleteEvent(eventID); delErr != nil {
-			log.Printf("КРИТИЧЕСКАЯ ОШИБКА: не удалось откатить событие %s в календаре: %v", eventID, delErr)
+			logrus.WithFields(logrus.Fields{
+				"eventID": eventID,
+				"error":   delErr,
+			}).Error("CRITICAL: failed to rollback calendar event")
 			b.sendMessage(chatID, "Произошла критическая ошибка. Пожалуйста, свяжитесь с администратором.")
 		} else {
-			log.Printf("Событие %s успешно удалено из календаря.", eventID)
+			logrus.Infof("Successfully rolled back calendar event %s", eventID)
 			b.sendMessage(chatID, "Ошибка при сохранении записи в базу данных. Попробуйте снова.")
 		}
 	} else {
@@ -287,7 +300,7 @@ func (b *TgBot) handleContactInput(update tgbot.Update) {
 		// Сообщение для админа
 		adminID, err := strconv.ParseInt(b.cfg.Telegram.AdminID, 10, 64)
 		if err != nil {
-			log.Printf("Не удалось конвертировать ADMIN_ID: %v", err)
+			logrus.WithError(err).Error("Failed to parse ADMIN_ID")
 		} else {
 			adminResponse := fmt.Sprintf("Новая запись:\n\nИмя: %s\nКонтакт: %s\nДата: %s\n\nСсылка на событие: %s",
 				userName, contact, slot.Format("02.01.2006 в 15:04"), link)
@@ -311,7 +324,7 @@ func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 
 	bookings, err := b.repo.GetUserBookings(chatID) // Фильтрация на уровне БД
 	if err != nil {
-		log.Printf("Ошибка получения записей: %v", err)
+		logrus.WithError(err).WithField("chatID", chatID).Error("Failed to get user bookings")
 		b.sendMessage(chatID, "Ошибка при получении записей.")
 		return
 	}
@@ -325,7 +338,7 @@ func (b *TgBot) handleShowAllBooking(update tgbot.Update) {
 	for _, booking := range bookings {
 		loc, err := time.LoadLocation("Europe/Moscow")
 		if err != nil {
-			log.Printf("Ошибка загрузки часового пояса: %v", err)
+			logrus.WithError(err).Error("Failed to load location")
 			// В случае ошибки выводим как есть (в UTC)
 			response.WriteString(fmt.Sprintf("ID: %d\nИмя: %s\nТелефон: %s\nДата/время: %s\n\n",
 				booking.ID, booking.Name, booking.Contact, booking.Datetime))
@@ -353,7 +366,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 	bookingIDStr := strings.TrimPrefix(update.CallbackQuery.Data, "cancel_")
 	bookingID, err := strconv.Atoi(bookingIDStr)
 	if err != nil {
-		log.Printf("Ошибка конвертации ID записи: %v", err)
+		logrus.WithError(err).Error("Failed to parse booking ID from callback")
 		b.sendMessage(chatID, "Некорректный ID записи.")
 		return
 	}
@@ -361,7 +374,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 	// 1. Получаем запись из БД, чтобы узнать event_id
 	bookingToCancel, err := b.repo.GetBookingByID(bookingID)
 	if err != nil {
-		log.Printf("Ошибка получения записи для отмены: %v", err)
+		logrus.WithError(err).WithField("bookingID", bookingID).Error("Failed to get booking by ID for cancellation")
 		b.sendMessage(chatID, "Не удалось найти указанную запись.")
 		return
 	}
@@ -369,7 +382,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 	// 2. Удаляем событие из Google Calendar (если оно есть)
 	if bookingToCancel.EventID != nil {
 		if err := b.calendarSvc.DeleteEvent(*bookingToCancel.EventID); err != nil {
-			log.Printf("Ошибка удаления события из календаря: %v", err)
+			logrus.WithError(err).WithField("eventID", *bookingToCancel.EventID).Error("Failed to delete calendar event")
 			b.sendMessage(chatID, "Ошибка при отмене записи в календаре. Пожалуйста, попробуйте еще раз.")
 			// Не продолжаем, если не удалось удалить из календаря
 			return
@@ -378,7 +391,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 
 	// 3. Удаляем запись из нашей БД
 	if err := b.repo.DeleteBookingById(bookingID); err != nil {
-		log.Printf("КРИТИЧЕСКАЯ ОШИБКА: событие в календаре удалено, но не удалось удалить запись из БД: %v", err)
+		logrus.WithError(err).WithField("bookingID", bookingID).Error("CRITICAL: failed to delete booking from DB after calendar event was deleted")
 		b.sendMessage(chatID, "Произошла критическая ошибка при отмене. Пожалуйста, свяжитесь с администратором.")
 		return
 	}
@@ -389,7 +402,7 @@ func (b *TgBot) handleCancelBooking(update tgbot.Update) {
 func (b *TgBot) sendMessage(chatID int64, text string) {
 	msg := tgbot.NewMessage(chatID, text)
 	if _, err := b.api.Send(msg); err != nil {
-		log.Printf("Ошибка при отправке сообщения: %v", err)
+		logrus.WithError(err).WithField("chatID", chatID).Error("Failed to send message")
 	}
 }
 

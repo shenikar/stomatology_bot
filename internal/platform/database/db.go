@@ -4,8 +4,7 @@ import (
 	"stomatology_bot/configs"
 	"context"
 	"fmt"
-	"log"
-	"os"
+	"github.com/sirupsen/logrus"
 
 
 	"github.com/jackc/pgx/v5"
@@ -16,10 +15,9 @@ func GetConnect(dbConfig configs.DbConfig) (*pgx.Conn, error) {
 
 	conn, err := pgx.Connect(context.Background(), dbURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		logrus.WithError(err).Fatal("Unable to connect to database")
 	}
-	log.Println("Connect database")
+	logrus.Info("Connect database")
 	return conn, nil
 
 }

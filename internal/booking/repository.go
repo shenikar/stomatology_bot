@@ -2,9 +2,9 @@ package booking
 
 import (
 	"context"
-	"log"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/sirupsen/logrus"
 )
 
 type BookingRepo struct {
@@ -38,7 +38,7 @@ func (r *BookingRepo) GetAllBooking() ([]Booking, error) {
 		var bookingItem Booking
 		var eventID *string
 		if err := rows.Scan(&bookingItem.ID, &bookingItem.Name, &bookingItem.Contact, &bookingItem.Datetime, &eventID); err != nil {
-			log.Printf("Ошибка при сканировании строки: %v", err)
+			logrus.WithError(err).Error("Failed to scan row in GetAllBooking")
 			continue
 		}
 		bookingItem.EventID = eventID
@@ -59,7 +59,7 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 	query := "SELECT id, user_id, name, contact, datetime, event_id FROM bookings WHERE user_id = $1"
 	rows, err := r.conn.Query(context.Background(), query, userID)
 	if err != nil {
-		log.Printf("Ошибка при выполнении запроса: %v", err)
+		logrus.WithError(err).WithField("userID", userID).Error("Failed to query user bookings")
 		return nil, err
 	}
 	defer rows.Close()
@@ -68,7 +68,7 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 		var booking Booking
 		var eventID *string // Используем *string для сканирования
 		if err := rows.Scan(&booking.ID, &booking.UserID, &booking.Name, &booking.Contact, &booking.Datetime, &eventID); err != nil {
-			log.Printf("Ошибка при сканировании строки: %v", err)
+			logrus.WithError(err).Error("Failed to scan row in GetUserBookings")
 			continue
 		}
 		booking.EventID = eventID
@@ -76,7 +76,7 @@ func (r *BookingRepo) GetUserBookings(userID int64) ([]Booking, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Printf("Ошибка при переборе строк: %v", err)
+		logrus.WithError(err).Error("Error iterating over user bookings rows")
 		return nil, err
 	}
 
