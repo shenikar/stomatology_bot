@@ -1,5 +1,9 @@
 # Stomatology Bot
 
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go)](https://golang.org/)
+[![Docker](https://img.shields.io/badge/Docker-28.4-2496ED?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
 Telegram-бот для записи на приём в стоматологическую клинику. Бот интегрирован с Google Calendar для управления расписанием.
 
 ## 🚀 Функционал
